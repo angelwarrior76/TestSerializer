@@ -1,15 +1,11 @@
 package com.homework.java.serialize.main;
 
 import com.homework.java.serialize.model.Serializer;
+
 import org.openjdk.jmh.runner.RunnerException;
 
-import javax.net.ssl.HttpsURLConnection;
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.net.URL;
-import java.util.ArrayList;
-import java.util.Collection;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -17,6 +13,7 @@ public class TestSerializer {
 
     public static void main(String[] args) {
         try {
+
             /*Collection<String> term = new ArrayList<>(0);
             term.add("1200");
             term.add("100");

@@ -9,36 +9,75 @@ import java.io.UnsupportedEncodingException;
 
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
+
 import java.math.BigDecimal;
 import java.math.BigInteger;
+
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.Map;
 
 import org.json.JSONObject;
 
 public class Serializer {
 
-    private static final int BUFFER = 1024;
     private static final String ENCODING = "UTF-8";
 
-    private static byte[] checkArray(byte[] array, int pos) {
-        if (pos >= array.length) {
-            int newSize = array.length * 2;
-            byte[] newArray = new byte[newSize];
-            System.arraycopy(array, 0, newArray, 0, array.length);
-            return newArray;
+    private static String getMapValueString(Object obj) {
+        StringBuffer sb = new StringBuffer();
+        sb.append("{");
+        Map<?, ?> map = (Map<?, ?>) obj;
+        for (Iterator iterator = map.entrySet().iterator(); iterator.hasNext(); ) {
+            Map.Entry<?, ?> entry = (Map.Entry<?, ?>) iterator.next();
+            sb.append(getObjectValueString(entry.getKey()));
+            sb.append(":");
+            sb.append(getObjectValueString(entry.getValue()));
+            if (iterator.hasNext()) {
+                sb.append(",");
+            }
         }
-        return array;
+        sb.append("}");
+        return sb.toString();
     }
 
-    private static byte[] createByteArray(String type, byte[] vbytes) throws UnsupportedEncodingException {
-        byte[] array = new byte[BUFFER];
-        byte[] tbytes = type.getBytes(ENCODING);
-        System.arraycopy(tbytes, 0, array, 0, tbytes.length);
-        byte[] sbytes = " ".getBytes(ENCODING);
-        System.arraycopy(sbytes, 0, array, tbytes.length, sbytes.length);
-        System.arraycopy(vbytes, 0, array, tbytes.length + sbytes.length, vbytes.length);
-        return array;
+    private static String getArrayValueString(Object obj) {
+        StringBuffer sb = new StringBuffer();
+        sb.append("[");
+        if (obj instanceof Object[]) {
+            Object[] list = (Object[]) obj;
+            for (int i = 0; i < list.length; i++) {
+                if (list.length > 1 && i > 0) {
+                    sb.append(",");
+                }
+                sb.append(getObjectValueString(list[i]));
+            }
+        } else {
+            final Object[] boxedArray = new Object[Array.getLength(obj)];
+            for (int i = 0; i < boxedArray.length; i++) {
+                boxedArray[i] = Array.get(obj, i);
+                if (boxedArray.length > 1 && i > 0) {
+                    sb.append(",");
+                }
+                sb.append(getObjectValueString(boxedArray[i]));
+            }
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    private static String getCollectionValueString(Object obj) {
+        StringBuffer sb = new StringBuffer();
+        sb.append("[");
+        Collection<?> list = (Collection<?>) obj;
+        Object[] array = list.toArray();
+        for (int i = 0; i < array.length; i++) {
+            if (array.length > 1 && i > 0) {
+                sb.append(",");
+            }
+            sb.append(getObjectValueString(array[i]));
+        }
+        sb.append("]");
+        return sb.toString();
     }
 
     private static String getObjectValueString(Object obj) {
@@ -69,7 +108,7 @@ public class Serializer {
     public static byte[] object2bytesv1(Object obj) throws IOException {
         if (obj != null) {
             StringBuffer sb = new StringBuffer(0);
-            sb.append("{\"type\" : \"");
+            sb.append("{\"type\":\"");
             Class clazz = obj.getClass();
             String type = clazz.getTypeName();
             if (clazz.isArray()) {
@@ -77,57 +116,18 @@ public class Serializer {
             } else {
                 sb.append(type);
             }
-            sb.append("\", \"value\" : ");
-
+            sb.append("\",\"value\":");
             System.out.println(" array: " + clazz.isArray());
             System.out.println(" primitive: " + clazz.isPrimitive());
             System.out.println(" synthetic: " + clazz.isSynthetic());
             System.out.println(" type: " + clazz.getTypeName());
             System.out.println(" local: " + clazz.isLocalClass());
             if (obj instanceof Collection) {
-                sb.append("[");
-                Collection<?> list = (Collection<?>) obj;
-                Object[] array = list.toArray();
-                for (int i = 0; i < array.length; i++) {
-                    if (array.length > 1 && i > 0) {
-                        sb.append(",");
-                    }
-                    sb.append(getObjectValueString(array[i]));
-                }
-                sb.append("]");
+                sb.append(getCollectionValueString(obj));
             } else if (obj instanceof Map) {
-                sb.append("{");
-                Map<?, ?> map = (Map<?, ?>) obj;
-                for (Map.Entry<?, ?> entry : map.entrySet()) {
-                    sb.append(getObjectValueString(entry.getKey()));
-                    sb.append(":");
-                    sb.append(getObjectValueString(entry.getValue()));
-                    /*if(map.entrySet().iterator().hasNext()) {
-                        sb.append(",");
-                    }*/
-                }
-                sb.append("}");
+                sb.append(getMapValueString(obj));
             } else if (clazz.isArray()) {
-                sb.append("[");
-                if (obj instanceof Object[]) {
-                    Object[] list = (Object[]) obj;
-                    for (int i = 0; i < list.length; i++) {
-                        if (list.length > 1 && i > 0) {
-                            sb.append(",");
-                        }
-                        sb.append(getObjectValueString(list[i]));
-                    }
-                } else {
-                    final Object[] boxedArray = new Object[Array.getLength(obj)];
-                    for (int i = 0; i < boxedArray.length; i++) {
-                        boxedArray[i] = Array.get(obj, i);
-                        if (boxedArray.length > 1 && i > 0) {
-                            sb.append(",");
-                        }
-                        sb.append(getObjectValueString(boxedArray[i]));
-                    }
-                }
-                sb.append("]");
+                sb.append(getArrayValueString(obj));
             } else if (obj instanceof Byte || obj instanceof Character
                     || obj instanceof Short || obj instanceof Integer
                     || obj instanceof Long || obj instanceof Boolean
@@ -138,19 +138,22 @@ public class Serializer {
             } else {
                 Field[] flds = clazz.getDeclaredFields();
                 for (Field f : flds) {
+                    sb.append("{\"");
+                    sb.append(f.getName());
+                    sb.append("\",\"type\":");
+                    sb.append(f.getType());
+                    sb.append("\",[");
                     Class<?> c = f.getType();
-                    if (c.isArray()) {
-                        System.out.format("%s%n"
-                                        + "           Field: %s%n"
-                                        + "            Type: %s%n"
-                                        + "  Component Type: %s%n",
-                                f, f.getName(), c, c.getComponentType());
+                    //if (f instanceof Collection) {
+                    //    sb.append(getCollectionValueString(f));
+                    //} else if (f instanceof Map) {
+                    //    sb.append(getMapValueString(f));
+                    /*} else*/ if (c.isArray()) {
+                        sb.append(getArrayValueString(f));
                     } else {
-                        System.out.format("%s%n"
-                                        + "           Field: %s%n"
-                                        + "            Type: %s%n",
-                                f, f.getName(), c);
+                        sb.append(getObjectValueString(f));
                     }
+                    sb.append("]");
                 }
             }
             sb.append("}");
