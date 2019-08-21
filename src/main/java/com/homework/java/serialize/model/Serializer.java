@@ -87,43 +87,26 @@ public class Serializer {
             if (obj instanceof Collection) {
                 sb.append("[");
                 Collection<?> list = (Collection<?>) obj;
-                for (Object item : list) {
-                    //item.getClass()
-                }
-                Field[] flds = clazz.getDeclaredFields();
-                for (Field f : flds) {
-                    Class<?> c = f.getType();
-                    if (c.isArray()) {
-                        System.out.format("%s%n"
-                                        + "           Field: %s%n"
-                                        + "            Type: %s%n"
-                                        + "  Component Type: %s%n",
-                                f, f.getName(), c, c.getComponentType());
-                    } else {
-                        System.out.format("%s%n"
-                                        + "           Field: %s%n"
-                                        + "            Type: %s%n",
-                                f, f.getName(), c);
+                Object[] array = list.toArray();
+                for (int i = 0; i < array.length; i++) {
+                    if (array.length > 1 && i > 0) {
+                        sb.append(",");
                     }
+                    sb.append(getObjectValueString(array[i]));
                 }
                 sb.append("]");
             } else if (obj instanceof Map) {
-                Field[] flds = clazz.getDeclaredFields();
-                for (Field f : flds) {
-                    Class<?> c = f.getType();
-                    if (c.isArray()) {
-                        System.out.format("%s%n"
-                                        + "           Field: %s%n"
-                                        + "            Type: %s%n"
-                                        + "  Component Type: %s%n",
-                                f, f.getName(), c, c.getComponentType());
-                    } else {
-                        System.out.format("%s%n"
-                                        + "           Field: %s%n"
-                                        + "            Type: %s%n",
-                                f, f.getName(), c);
-                    }
+                sb.append("{");
+                Map<?, ?> map = (Map<?, ?>) obj;
+                for (Map.Entry<?, ?> entry : map.entrySet()) {
+                    sb.append(getObjectValueString(entry.getKey()));
+                    sb.append(":");
+                    sb.append(getObjectValueString(entry.getValue()));
+                    /*if(map.entrySet().iterator().hasNext()) {
+                        sb.append(",");
+                    }*/
                 }
+                sb.append("}");
             } else if (clazz.isArray()) {
                 sb.append("[");
                 if (obj instanceof Object[]) {

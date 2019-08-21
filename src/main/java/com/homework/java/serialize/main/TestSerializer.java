@@ -10,6 +10,8 @@ import java.io.InputStreamReader;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 
 public class TestSerializer {
 
@@ -21,7 +23,13 @@ public class TestSerializer {
             term.add("1");
             term.add("-4");
             term.add("5");*/
-            int[] term = {1200, 100, 1, -4, 5};
+            Map<String, String> term = new HashMap<>(0);
+            term.put("1","1200");
+            term.put("2","100");
+            term.put("3","1");
+            term.put("4","-4");
+            term.put("5","5");
+            //int[] term = {1200, 100, 1, -4, 5};
             //Integer[] term = {1200, 100, 1, -4, 5};
             //int term = 1200;
             //Integer term = Integer.valueOf(1200);
