@@ -13,9 +13,7 @@ import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 
-import java.util.Collection;
-import java.util.Iterator;
-import java.util.Map;
+import java.util.*;
 
 import org.json.JSONObject;
 
@@ -80,6 +78,45 @@ public class Serializer {
         return sb.toString();
     }
 
+    private static Object getObjectValue(String str) {
+        if ("".equals(str)) {
+            return str;
+        } else if ("true".equalsIgnoreCase(str)) {
+            return Boolean.TRUE;
+        } else if ("false".equalsIgnoreCase(str)) {
+            return Boolean.FALSE;
+        } else if ("null".equalsIgnoreCase(str)) {
+            return null;
+        } else {
+            char initial = str.charAt(0);
+            if (initial >= '0' && initial <= '9' || initial == '-') {
+                if (str.indexOf(46) > -1 || str.indexOf(101) > -1 || str.indexOf(69) > -1 || "-0".equals(str)) {
+                    if (str.length() > 14) {
+                        return new BigDecimal(str);
+                    } else {
+                        Double d = Double.valueOf(str);
+                        return (!d.isInfinite() && !d.isNaN() ? d : new BigDecimal(str));
+                    }
+                } else {
+                    BigInteger bi = new BigInteger(str);
+                    if (bi.bitLength() <= 31) {
+                        return bi.intValue();
+                    } else {
+                        Long l = Long.valueOf(str);
+                        if (str.equals(l.toString())) {
+                            if (l == (long) l.intValue()) {
+                                return l.intValue();
+                            }
+                            return l;
+                        }
+                        return (bi.bitLength() <= 63 ? bi.longValue() : bi);
+                    }
+                }
+            }
+            return str;
+        }
+    }
+
     private static String getObjectValueString(Object obj) {
         StringBuffer sb = new StringBuffer(0);
         if (obj instanceof Boolean || obj instanceof Byte
@@ -105,23 +142,18 @@ public class Serializer {
         return null;
     }
 
-    public static byte[] object2bytesv1(Object obj) throws IOException {
+    public static byte[] object2bytesv1(Object obj) throws IOException, IllegalAccessException {
         if (obj != null) {
             StringBuffer sb = new StringBuffer(0);
             sb.append("{\"type\":\"");
             Class clazz = obj.getClass();
             String type = clazz.getTypeName();
             if (clazz.isArray()) {
-                sb.append("Array");
+                sb.append(clazz.getComponentType().getTypeName());
             } else {
                 sb.append(type);
             }
             sb.append("\",\"value\":");
-            System.out.println(" array: " + clazz.isArray());
-            System.out.println(" primitive: " + clazz.isPrimitive());
-            System.out.println(" synthetic: " + clazz.isSynthetic());
-            System.out.println(" type: " + clazz.getTypeName());
-            System.out.println(" local: " + clazz.isLocalClass());
             if (obj instanceof Collection) {
                 sb.append(getCollectionValueString(obj));
             } else if (obj instanceof Map) {
@@ -137,27 +169,33 @@ public class Serializer {
                 sb.append(getObjectValueString(obj));
             } else {
                 Field[] flds = clazz.getDeclaredFields();
-                for (Field f : flds) {
-                    sb.append("{\"");
-                    sb.append(f.getName());
-                    sb.append("\",\"type\":");
-                    sb.append(f.getType());
-                    sb.append("\",[");
-                    Class<?> c = f.getType();
-                    //if (f instanceof Collection) {
-                    //    sb.append(getCollectionValueString(f));
-                    //} else if (f instanceof Map) {
-                    //    sb.append(getMapValueString(f));
-                    /*} else*/ if (c.isArray()) {
-                        sb.append(getArrayValueString(f));
-                    } else {
-                        sb.append(getObjectValueString(f));
+                for (int i = 0; i < flds.length; i++) {
+                    if (flds.length > 1 && i > 0) {
+                        sb.append(",");
                     }
-                    sb.append("]");
+                    sb.append("{\"name\":\"");
+                    sb.append(flds[i].getName());
+                    sb.append("\",\"type\":");
+                    Class<?> c = flds[i].getType();
+                    if (c.isArray()) {
+                        sb.append("Array");
+                    } else {
+                        sb.append(c.getTypeName());
+                    }
+                    sb.append("\",\"value\":{");
+                    if (flds[i].get(obj) instanceof Collection) {
+                        sb.append(getCollectionValueString(flds[i].get(obj)));
+                    } else if (flds[i].get(obj) instanceof Map) {
+                        sb.append(getMapValueString(flds[i].get(obj)));
+                    } else if (c.isArray()) {
+                        sb.append(getArrayValueString(flds[i].get(obj)));
+                    } else {
+                        sb.append(getObjectValueString(flds[i].get(obj)));
+                    }
+                    sb.append("}");
                 }
             }
             sb.append("}");
-            System.out.println(" obj: " + sb.toString());
             return sb.toString().getBytes(ENCODING);
         }
         return null;
@@ -181,11 +219,81 @@ public class Serializer {
         return null;
     }
 
-    public static Object bytes2objectv1(byte[] data) throws IOException, ClassNotFoundException {
+    public static Object bytes2objectv1(byte[] data) throws IOException, IllegalAccessException, InstantiationException {
         if (data != null) {
-            ByteArrayInputStream in = new ByteArrayInputStream(data);
-            ObjectInputStream is = new ObjectInputStream(in);
-            return is.readObject();
+            Object ret = null;
+            String str = new String(data, ENCODING);
+            int ts = str.indexOf(":\""), tf = str.indexOf("\",\"value");
+            String type = str.substring(ts + 2, tf);
+            boolean isarray = str.indexOf("value\":[") > 0;
+            Object obj = null;
+            try {
+                Class<?> clazz = Class.forName(type);
+                obj = clazz.newInstance();
+            } catch (ClassNotFoundException e) {
+                switch (type) {
+                    case "int":
+                        obj = Integer.class;
+                        break;
+                    case "short":
+                        obj = Short.class;
+                        break;
+                    case "long":
+                        obj = Long.class;
+                        break;
+                    case "float":
+                        obj = Float.class;
+                        break;
+                    case "double":
+                        obj = Double.class;
+                        break;
+                    case "byte":
+                        obj = Byte.class;
+                        break;
+                    case "boolean":
+                        obj = Boolean.class;
+                        break;
+                    case "char":
+                        obj = Character.class;
+                        break;
+                }
+            }
+            int vs = str.indexOf("value\":") + 8, vf = str.lastIndexOf("}") - 1;
+            String value = str.substring(vs, vf);
+            if (obj instanceof Collection) {
+                String strings[] = value.split(",");
+                Object values[] = new Object[strings.length];
+                for (int i = 0; i < strings.length; i++) {
+                    values[i] = getObjectValue(strings[i]);
+                }
+                ret = Arrays.asList(values);
+            } else if (obj instanceof Map) {
+                Map map = new HashMap(0);
+                String strings[] = value.split(",");
+                for (int i = 0; i < strings.length; i++) {
+                    String pair[] = strings[i].split(":");
+                    String key = pair[0], val = pair[1];
+                    map.put(getObjectValue(key), getObjectValue(val));
+                }
+                ret = map;
+            } else if (isarray) {
+                String strings[] = value.split(",");
+                Object values[] = new Object[strings.length];
+                for (int i = 0; i < strings.length; i++) {
+                    values[i] = getObjectValue(strings[i]);
+                }
+                ret = values;
+            } else if (obj instanceof Byte || obj instanceof Character
+                    || obj instanceof Short || obj instanceof Integer
+                    || obj instanceof Long || obj instanceof Boolean
+                    || obj instanceof Float || obj instanceof Double
+                    || obj instanceof String || obj instanceof BigInteger
+                    || obj instanceof BigDecimal) {
+                ret = getObjectValue(value);
+            } else {
+                //
+            }
+            return ret;
         }
         return null;
     }
