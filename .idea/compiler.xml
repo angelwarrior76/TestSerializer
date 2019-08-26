@@ -6,11 +6,11 @@
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="$P24_SIGN_SKIP$" />
-        <module name="testSerializer" />
+        <module name="TestSerializer" />
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
-      <module name="testSerializer" target="1.8" />
+      <module name="TestSerializer" target="1.8"/>
     </bytecodeTargetLevel>
   </component>
 </project>
